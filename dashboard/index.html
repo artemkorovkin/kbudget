@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Семейный бюджет</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { text-align: center; margin-bottom: 8px; font-size: 1.8em; }
+    .subtitle { text-align: center; color: #8b949e; margin-bottom: 24px; }
+
+    /* Month tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 8px 20px;
+      border-radius: 8px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      color: #8b949e;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab:hover { border-color: #58a6ff; color: #58a6ff; }
+    .tab.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+
+    /* Summary cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .card .label { color: #8b949e; font-size: 0.85em; margin-bottom: 4px; }
+    .card .value { font-size: 1.6em; font-weight: 700; }
+    .card .value.income { color: #3fb950; }
+    .card .value.expense { color: #f85149; }
+    .card .value.profit-pos { color: #3fb950; }
+    .card .value.profit-neg { color: #f85149; }
+    .card .value.debt { color: #d29922; }
+
+    /* Chart grid */
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
+    .chart-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .chart-box h3 { margin-bottom: 12px; font-size: 1em; color: #c9d1d9; }
+    .chart-box canvas { max-height: 300px; }
+
+    /* Debt table */
+    .debt-section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .debt-section h3 { margin-bottom: 12px; }
+    .debt-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .debt-row:last-child { border-bottom: none; }
+    .debt-label { color: #c9d1d9; }
+    .debt-amount { font-weight: 600; color: #d29922; }
+    .debt-change { font-size: 0.85em; margin-left: 8px; }
+    .debt-change.down { color: #3fb950; }
+    .debt-change.up { color: #f85149; }
+
+    /* Transactions table */
+    .tx-section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .tx-section h3 { margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; color: #8b949e; font-weight: 500; padding: 8px; border-bottom: 1px solid #30363d; }
+    td { padding: 8px; border-bottom: 1px solid #21262d; }
+    .tx-income { color: #3fb950; }
+    .tx-expense { color: #f85149; }
+
+    .loading { text-align: center; padding: 60px; color: #8b949e; font-size: 1.2em; }
+  </style>
+</head>
+<body>
+  <h1>💰 Семейный бюджет</h1>
+  <p class="subtitle">Дашборд семейных финансов</p>
+
+  <div id="app" class="loading">Загрузка данных...</div>
+
+  <script>
+    const CATEGORY_COLORS = {
+      'Продукты': '#f85149',
+      'Транспорт': '#58a6ff',
+      'Дом': '#d29922',
+      'Здоровье': '#f778ba',
+      'Лайфстайл': '#a371f7',
+      'Кредиты': '#6e7681',
+      'Образование': '#3fb950',
+      'Еда вне дома': '#db6d28',
+      'Подарки': '#bc8cff',
+    };
+
+    const CATEGORY_EMOJI = {
+      'Продукты': '🛒', 'Транспорт': '🚗', 'Дом': '🏠',
+      'Здоровье': '❤️', 'Лайфстайл': '✨', 'Кредиты': '💳',
+      'Образование': '📚', 'Еда вне дома': '🍽', 'Подарки': '🎁',
+    };
+
+    const DEBT_LABELS = {
+      'debt_car': '🚗 Кредит машина',
+      'debt_coffee_machine': '☕ Кофемашина',
+      'debt_drums': '🥁 Барабаны',
+      'debt_credit_card': '💳 Кредитка',
+    };
+
+    let DATA = {};
+    let TRANSACTIONS = [];
+    let allMonths = [];
+    let selectedMonth = null;
+    let expenseChart = null;
+    let barChart = null;
+
+    function fmt(n) {
+      return new Intl.NumberFormat('ru-RU').format(Math.round(n));
+    }
+
+    async function loadData() {
+      const res = await fetch('/api/data');
+      const { snapshots, transactions } = await res.json();
+
+      DATA = {};
+      for (const snap of snapshots) {
+        DATA[snap.month] = {
+          totalIncome: snap.total_income,
+          totalExpenses: snap.total_expenses,
+          profit: snap.profit,
+          expenses: {
+            'Продукты': snap.expenses_food,
+            'Транспорт': snap.expenses_transport,
+            'Дом': snap.expenses_home,
+            'Здоровье': snap.expenses_health,
+            'Лайфстайл': snap.expenses_lifestyle,
+            'Кредиты': snap.expenses_credits,
+            'Образование': snap.expenses_education,
+            'Еда вне дома': snap.expenses_dining,
+            'Подарки': snap.expenses_gifts,
+          },
+          debts: {
+            'debt_car': snap.debt_car,
+            'debt_coffee_machine': snap.debt_coffee_machine,
+            'debt_drums': snap.debt_drums,
+            'debt_credit_card': snap.debt_credit_card,
+          },
+          totalDebt: snap.total_debt,
+          debtChange: snap.debt_change,
+        };
+      }
+
+      TRANSACTIONS = transactions;
+      allMonths = Object.keys(DATA);
+      selectedMonth = allMonths[allMonths.length - 1] || null;
+
+      renderApp();
+    }
+
+    function renderApp() {
+      if (!selectedMonth) {
+        document.getElementById('app').innerHTML = '<div class="loading">Нет данных</div>';
+        return;
+      }
+
+      const d = DATA[selectedMonth];
+      const profitClass = d.profit >= 0 ? 'profit-pos' : 'profit-neg';
+      const profitSign = d.profit >= 0 ? '+' : '';
+
+      document.getElementById('app').innerHTML = `
+        <div class="tabs" id="tabs"></div>
+        <div class="cards">
+          <div class="card">
+            <div class="label">💰 Доходы</div>
+            <div class="value income">₽${fmt(d.totalIncome)}</div>
+          </div>
+          <div class="card">
+            <div class="label">💸 Расходы</div>
+            <div class="value expense">₽${fmt(d.totalExpenses)}</div>
+          </div>
+          <div class="card">
+            <div class="label">📊 Результат</div>
+            <div class="value ${profitClass}">${profitSign}₽${fmt(d.profit)}</div>
+          </div>
+          <div class="card">
+            <div class="label">🏦 Общий долг</div>
+            <div class="value debt">₽${fmt(d.totalDebt)}</div>
+          </div>
+        </div>
+        <div class="charts">
+          <div class="chart-box">
+            <h3>Расходы по категориям</h3>
+            <canvas id="expenseChart"></canvas>
+          </div>
+          <div class="chart-box">
+            <h3>Доходы vs Расходы по месяцам</h3>
+            <canvas id="barChart"></canvas>
+          </div>
+        </div>
+        <div class="debt-section">
+          <h3>💳 Кредиты</h3>
+          <div id="debtRows"></div>
+        </div>
+        <div class="tx-section">
+          <h3>📝 Последние записи</h3>
+          <table>
+            <thead><tr><th>Месяц</th><th>Тип</th><th>Категория</th><th>Сумма</th><th>Описание</th></tr></thead>
+            <tbody id="txRows"></tbody>
+          </table>
+        </div>
+      `;
+
+      renderTabs();
+      renderExpenseChart(d);
+      renderBarChart();
+      renderDebt(d);
+      renderTransactions();
+    }
+
+    function renderTabs() {
+      const container = document.getElementById('tabs');
+      if (!container) return;
+      container.innerHTML = allMonths.map(m =>
+        `<div class="tab ${m === selectedMonth ? 'active' : ''}" onclick="selectMonth('${m}')">${m}</div>`
+      ).join('');
+    }
+
+    function selectMonth(m) {
+      selectedMonth = m;
+      renderApp();
+    }
+
+    function renderExpenseChart(d) {
+      const ctx = document.getElementById('expenseChart');
+      if (!ctx) return;
+      const entries = Object.entries(d.expenses).filter(([, v]) => v > 0);
+      if (expenseChart) expenseChart.destroy();
+      expenseChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: entries.map(([k]) => `${CATEGORY_EMOJI[k] || ''} ${k}`),
+          datasets: [{
+            data: entries.map(([, v]) => v),
+            backgroundColor: entries.map(([k]) => CATEGORY_COLORS[k] || '#6e7681'),
+            borderWidth: 0,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: '#c9d1d9', font: { size: 11 }, padding: 8 }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ₽${fmt(ctx.raw)}`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderBarChart() {
+      const ctx = document.getElementById('barChart');
+      if (!ctx) return;
+      if (barChart) barChart.destroy();
+      barChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: allMonths,
+          datasets: [
+            {
+              label: 'Доходы',
+              data: allMonths.map(m => DATA[m].totalIncome),
+              backgroundColor: '#238636',
+              borderRadius: 4,
+            },
+            {
+              label: 'Расходы',
+              data: allMonths.map(m => DATA[m].totalExpenses),
+              backgroundColor: '#da3633',
+              borderRadius: 4,
+            },
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { ticks: { color: '#8b949e' }, grid: { display: false } },
+            y: {
+              ticks: {
+                color: '#8b949e',
+                callback: (v) => '₽' + fmt(v),
+              },
+              grid: { color: '#21262d' },
+            },
+          },
+          plugins: {
+            legend: { labels: { color: '#c9d1d9' } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.dataset.label}: ₽${fmt(ctx.raw)}`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderDebt(d) {
+      const container = document.getElementById('debtRows');
+      if (!container) return;
+
+      // Find previous month for comparison
+      const idx = allMonths.indexOf(selectedMonth);
+      const prev = idx > 0 ? DATA[allMonths[idx - 1]] : null;
+
+      let html = '';
+      for (const [key, label] of Object.entries(DEBT_LABELS)) {
+        const val = d.debts[key] || 0;
+        if (val <= 0) continue;
+        let changeHtml = '';
+        if (prev) {
+          const diff = val - (prev.debts[key] || 0);
+          if (diff < 0) changeHtml = `<span class="debt-change down">↓ −₽${fmt(Math.abs(diff))}</span>`;
+          else if (diff > 0) changeHtml = `<span class="debt-change up">↑ +₽${fmt(Math.abs(diff))}</span>`;
+        }
+        html += `<div class="debt-row"><span class="debt-label">${label}</span><span><span class="debt-amount">₽${fmt(val)}</span>${changeHtml}</span></div>`;
+      }
+
+      // Total
+      let totalChange = '';
+      if (d.debtChange) {
+        const cls = d.debtChange < 0 ? 'down' : 'up';
+        const sign = d.debtChange < 0 ? '↓ −' : '↑ +';
+        totalChange = `<span class="debt-change ${cls}">${sign}₽${fmt(Math.abs(d.debtChange))}</span>`;
+      }
+      html += `<div class="debt-row" style="font-weight:700"><span class="debt-label">Итого</span><span><span class="debt-amount">₽${fmt(d.totalDebt)}</span>${totalChange}</span></div>`;
+
+      container.innerHTML = html;
+    }
+
+    function renderTransactions() {
+      const tbody = document.getElementById('txRows');
+      if (!tbody) return;
+      if (!TRANSACTIONS.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#8b949e">Нет ручных записей</td></tr>';
+        return;
+      }
+      tbody.innerHTML = TRANSACTIONS.slice(0, 50).map(t => {
+        const cls = t.type === 'income' ? 'tx-income' : 'tx-expense';
+        const sign = t.type === 'income' ? '+' : '−';
+        return `<tr>
+          <td>${t.month}</td>
+          <td class="${cls}">${t.type === 'income' ? 'Доход' : 'Расход'}</td>
+          <td>${t.category}</td>
+          <td class="${cls}">${sign}₽${fmt(t.amount)}</td>
+          <td>${t.description || '—'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
