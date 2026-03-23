@@ -4,6 +4,18 @@ MONTH_NAMES_RU = {
     9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
 }
 
+# Reverse lookup: Russian month name -> sort number
+_MONTH_ORDER = {name: num for num, name in MONTH_NAMES_RU.items()}
+
+
+def month_sort_key(month_str: str) -> tuple:
+    """Return (year, month_num) for sorting 'Февраль 2026' style strings."""
+    parts = month_str.split()
+    if len(parts) == 2:
+        name, year = parts
+        return (int(year), _MONTH_ORDER.get(name, 0))
+    return (0, 0)
+
 INCOME_CATEGORIES = [
     "Зарплата Артём",
     "Проценты и кешбэк",

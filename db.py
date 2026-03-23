@@ -2,7 +2,7 @@ import sqlite3
 import os
 from datetime import datetime
 from contextlib import contextmanager
-from data_seed import get_russian_month
+from data_seed import get_russian_month, month_sort_key
 
 DB_PATH = os.getenv("DATABASE_PATH", "budget.db")
 
@@ -117,15 +117,16 @@ def get_budget_context() -> str:
     """Build a text context for AI queries."""
     with get_conn() as conn:
         snaps = conn.execute(
-            "SELECT * FROM monthly_snapshots ORDER BY month"
+            "SELECT * FROM monthly_snapshots"
         ).fetchall()
         txs = conn.execute(
             "SELECT * FROM transactions ORDER BY created_at DESC LIMIT 50"
         ).fetchall()
 
+    snaps = sorted([dict(s) for s in snaps], key=lambda s: month_sort_key(s["month"]))
+
     lines = ["=== Monthly Snapshots ==="]
     for s in snaps:
-        s = dict(s)
         lines.append(
             f"{s['month']}: income \u20bd{s['total_income']:,.0f}, "
             f"expenses \u20bd{s['total_expenses']:,.0f}, "

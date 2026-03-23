@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from flask import Flask, jsonify, send_from_directory, request, abort, session
 from dotenv import load_dotenv
 from db import init_db, get_conn
+from data_seed import month_sort_key
 
 load_dotenv()
 
@@ -35,12 +36,13 @@ def index():
 @app.route("/api/data")
 def get_data():
     with get_conn() as conn:
-        snapshots = conn.execute("SELECT * FROM monthly_snapshots ORDER BY month").fetchall()
+        snapshots = conn.execute("SELECT * FROM monthly_snapshots").fetchall()
         transactions = conn.execute(
             "SELECT * FROM transactions ORDER BY created_at DESC LIMIT 200"
         ).fetchall()
+    sorted_snaps = sorted([dict(r) for r in snapshots], key=lambda s: month_sort_key(s["month"]))
     return jsonify({
-        "snapshots": [dict(r) for r in snapshots],
+        "snapshots": sorted_snaps,
         "transactions": [dict(r) for r in transactions],
     })
 

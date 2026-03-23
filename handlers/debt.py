@@ -1,20 +1,21 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from db import get_conn
+from data_seed import month_sort_key
 
 
 async def handle_debt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with get_conn() as conn:
-        snaps = conn.execute(
-            "SELECT * FROM monthly_snapshots ORDER BY month DESC LIMIT 2"
-        ).fetchall()
+        snaps = conn.execute("SELECT * FROM monthly_snapshots").fetchall()
+
+    snaps = sorted([dict(s) for s in snaps], key=lambda s: month_sort_key(s["month"]), reverse=True)
 
     if not snaps:
         await update.message.reply_text("\u274c Нет данных по кредитам")
         return
 
-    latest = dict(snaps[0])
-    prev = dict(snaps[1]) if len(snaps) > 1 else None
+    latest = snaps[0]
+    prev = snaps[1] if len(snaps) > 1 else None
 
     lines = [f"\U0001f4b3 *Кредиты \u2014 {latest['month']}*\n"]
 
