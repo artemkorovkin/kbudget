@@ -1,0 +1,95 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+
+            # Install Python if needed
+            if ! command -v python3 &> /dev/null; then
+              apt update && apt install -y python3 python3-pip python3-venv git
+            fi
+
+            # Clone or pull
+            if [ ! -d /home/kbudget/.git ]; then
+              git clone https://github.com/artemkorovkin/kbudget.git /home/kbudget
+            else
+              cd /home/kbudget
+              git fetch origin
+              git reset --hard origin/main
+            fi
+
+            cd /home/kbudget
+
+            # Setup venv
+            if [ ! -d venv ]; then
+              python3 -m venv venv
+            fi
+            source venv/bin/activate
+            pip install -q -r requirements.txt
+
+            # Write .env
+            cat > .env << 'ENVEOF'
+            TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+            DATABASE_PATH=/home/kbudget/budget.db
+            DASHBOARD_PORT=8080
+            DASHBOARD_URL=http://${{ secrets.VPS_HOST }}:8080
+            ALLOWED_CHAT_IDS=${{ secrets.ALLOWED_CHAT_IDS }}
+            ENVEOF
+            # Remove leading whitespace from .env
+            sed -i 's/^[[:space:]]*//' .env
+
+            # Create systemd services
+            cat > /etc/systemd/system/kbudget-bot.service << 'EOF'
+            [Unit]
+            Description=Family Budget Telegram Bot
+            After=network.target
+
+            [Service]
+            WorkingDirectory=/home/kbudget
+            ExecStart=/home/kbudget/venv/bin/python bot.py
+            Restart=always
+            RestartSec=5
+            EnvironmentFile=/home/kbudget/.env
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            cat > /etc/systemd/system/kbudget-dash.service << 'EOF'
+            [Unit]
+            Description=Family Budget Dashboard
+            After=network.target
+
+            [Service]
+            WorkingDirectory=/home/kbudget
+            ExecStart=/home/kbudget/venv/bin/python dashboard/server.py
+            Restart=always
+            RestartSec=5
+            EnvironmentFile=/home/kbudget/.env
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            # Remove leading whitespace from service files
+            sed -i 's/^[[:space:]]*//' /etc/systemd/system/kbudget-bot.service
+            sed -i 's/^[[:space:]]*//' /etc/systemd/system/kbudget-dash.service
+
+            # Reload and restart
+            systemctl daemon-reload
+            systemctl enable kbudget-bot kbudget-dash
+            systemctl restart kbudget-bot kbudget-dash
