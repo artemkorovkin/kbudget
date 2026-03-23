@@ -72,6 +72,73 @@ def parse_message(text: str) -> dict:
         return {"action": "unknown"}
 
 
+RECEIPT_SYSTEM = """
+You are a receipt parser for a Russian-speaking family budget app.
+Analyze the photo of a receipt and extract ALL line items.
+Return ONLY valid JSON with this structure:
+
+{
+  "action": "receipt",
+  "store": "<store name or null>",
+  "items": [
+    {
+      "description": "<item name in Russian>",
+      "amount": <price as number>,
+      "category": "<category from list>"
+    }
+  ],
+  "total": <total amount as number>
+}
+
+If the image is not a receipt or unreadable:
+{"action": "unknown"}
+
+Categories: Продукты, Транспорт, Дом, Здоровье, Лайфстайл, Кредиты, Образование, Еда вне дома, Подарки, Другое
+
+Rules:
+- Most grocery receipts → items are "Продукты"
+- Restaurant/cafe receipts → "Еда вне дома"
+- Pharmacy receipts → "Здоровье"
+- Gas station → "Транспорт"
+- Amount is always positive
+- Use the total from the receipt, not sum of items (they may differ due to discounts)
+"""
+
+
+def parse_receipt(image_data: bytes, media_type: str = "image/jpeg") -> dict:
+    """Parse a receipt photo using Claude vision."""
+    import base64
+    b64 = base64.standard_b64encode(image_data).decode("utf-8")
+
+    response = get_client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1000,
+        system=RECEIPT_SYSTEM,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": b64,
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": "Parse this receipt. Extract all items and the total.",
+                },
+            ],
+        }],
+    )
+
+    try:
+        return json.loads(response.content[0].text)
+    except (json.JSONDecodeError, IndexError):
+        return {"action": "unknown"}
+
+
 AI_ANSWER_SYSTEM = """
 You are a helpful family financial assistant. Answer questions about the family budget in Russian.
 Be concise (max 100 words), use real numbers from the data, and use ₽ for currency.

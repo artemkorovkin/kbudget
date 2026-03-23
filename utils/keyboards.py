@@ -11,10 +11,13 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("\U0001f4b3 Кредиты", callback_data="menu:debt"),
-            InlineKeyboardButton("\u2753 Задать вопрос", callback_data="menu:ask"),
+            InlineKeyboardButton("\U0001f4c8 Прогноз", callback_data="menu:projection"),
         ],
         [
+            InlineKeyboardButton("\u2753 Задать вопрос", callback_data="menu:ask"),
             InlineKeyboardButton("\U0001f4c5 Выбрать месяц", callback_data="menu:months"),
+        ],
+        [
             InlineKeyboardButton("\U0001f4ca Дашборд", callback_data="menu:dashboard"),
         ],
     ])

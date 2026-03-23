@@ -7,7 +7,7 @@ from telegram.ext import (
     CallbackQueryHandler, filters, ContextTypes,
 )
 from db import init_db, add_transaction, get_budget_context, get_month_summary
-from ai_parser import parse_message, answer_question
+from ai_parser import parse_message, answer_question, parse_receipt
 from handlers.add import get_add_conversation_handler
 from handlers.summary import handle_summary_command, handle_month_command, format_summary
 from handlers.ask import handle_ask_command
@@ -40,8 +40,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Просто напишите что потратили или получили:\n"
         "\u2022 _\u00abпотратил 3500 на продукты\u00bb_\n"
         "\u2022 _\u00abпришло 5000 кешбэк\u00bb_\n"
-        "\u2022 _\u00abсколько ушло на еду в январе?\u00bb_\n\n"
-        "Или выберите действие:",
+        "\u2022 _\u00abсколько ушло на еду в январе?\u00bb_\n"
+        "\U0001f4f7 Или отправьте *фото чека*!\n\n"
+        "Выберите действие:",
         parse_mode="Markdown",
         reply_markup=main_menu_keyboard(),
     )
@@ -111,6 +112,17 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=main_menu_keyboard(),
         )
 
+    elif action == "projection":
+        from db import get_conn
+        from data_seed import month_sort_key
+        from utils.debt_projection import calculate_projections, format_projections
+        with get_conn() as conn:
+            snaps = conn.execute("SELECT * FROM monthly_snapshots").fetchall()
+        snaps = sorted([dict(s) for s in snaps], key=lambda s: month_sort_key(s["month"]))
+        projections = calculate_projections(snaps)
+        text = format_projections(projections)
+        await query.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu_keyboard())
+
     elif action == "ask":
         context.user_data["awaiting_question"] = True
         await query.message.reply_text("Задайте вопрос о бюджете:")
@@ -150,6 +162,88 @@ async def handle_month_callback(update: Update, context: ContextTypes.DEFAULT_TY
         parse_mode="Markdown",
         reply_markup=main_menu_keyboard(),
     )
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle receipt photos."""
+    if not await auth_check(update):
+        return
+
+    await update.message.chat.send_action("typing")
+
+    # Get the largest photo
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    image_bytes = await file.download_as_bytearray()
+
+    parsed = parse_receipt(bytes(image_bytes), "image/jpeg")
+
+    if parsed.get("action") != "receipt" or not parsed.get("items"):
+        await update.message.reply_text(
+            "Не удалось распознать чек \U0001f914\nПопробуйте сфотографировать ближе и чётче.",
+            reply_markup=main_menu_keyboard(),
+        )
+        return
+
+    # Save each item as a transaction
+    total = parsed.get("total", 0)
+    store = parsed.get("store", "")
+    items = parsed["items"]
+
+    # If only one category across all items, save as single transaction
+    categories = set(item.get("category", "Другое") for item in items)
+    if len(categories) == 1:
+        single_parsed = {
+            "type": "expense",
+            "category": items[0].get("category", "Другое"),
+            "amount": total or sum(item["amount"] for item in items),
+            "description": store or "Чек",
+            "person": "Семья",
+        }
+        tx_id = add_transaction(single_parsed)
+        reply = format_transaction_confirm(single_parsed, tx_id)
+        await update.message.reply_text(reply, parse_mode="Markdown", reply_markup=main_menu_keyboard())
+    else:
+        # Multiple categories — save each item separately
+        tx_ids = []
+        for item in items:
+            tx_parsed = {
+                "type": "expense",
+                "category": item.get("category", "Другое"),
+                "amount": item["amount"],
+                "description": item.get("description", ""),
+                "person": "Семья",
+            }
+            tx_ids.append(add_transaction(tx_parsed))
+
+        lines = [f"\U0001f9fe *Чек распознан* ({store or 'магазин'})\n"]
+        for item, tx_id in zip(items, tx_ids):
+            lines.append(f"  \u2022 {item.get('description', '?')} — \u20bd{item['amount']:,.0f} _{item.get('category', '')}_")
+        lines.append(f"\n*Итого: \u20bd{total:,.0f}* ({len(items)} позиций)")
+        lines.append(f"_Записано #{tx_ids[0]}–#{tx_ids[-1]}_")
+
+        await update.message.reply_text(
+            "\n".join(lines),
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard(),
+        )
+
+
+async def handle_projection_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /projection command — debt payoff forecast."""
+    if not await auth_check(update):
+        return
+    from db import get_conn
+    from data_seed import month_sort_key
+    from utils.debt_projection import calculate_projections, format_projections
+
+    with get_conn() as conn:
+        snaps = conn.execute("SELECT * FROM monthly_snapshots").fetchall()
+    snaps = sorted([dict(s) for s in snaps], key=lambda s: month_sort_key(s["month"]))
+
+    projections = calculate_projections(snaps)
+    text = format_projections(projections)
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu_keyboard())
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -214,6 +308,7 @@ def main():
     app.add_handler(CommandHandler("summary", handle_summary_command))
     app.add_handler(CommandHandler("month", handle_month_command))
     app.add_handler(CommandHandler("debt", handle_debt_command))
+    app.add_handler(CommandHandler("projection", handle_projection_command))
     app.add_handler(CommandHandler("ask", handle_ask_command))
     def _dashboard_url():
         base = os.getenv("DASHBOARD_URL", "http://localhost:8080")
@@ -229,6 +324,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_menu_callback, pattern=r"^menu:"))
     app.add_handler(CallbackQueryHandler(handle_month_callback, pattern=r"^month:"))
 
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logging.info("Bot started")
