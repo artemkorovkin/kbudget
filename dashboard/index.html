@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Семейный бюджет</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -11,29 +11,37 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0f1117;
       color: #e1e4e8;
-      padding: 20px;
+      padding: 16px;
       max-width: 1200px;
       margin: 0 auto;
+      -webkit-text-size-adjust: 100%;
     }
-    h1 { text-align: center; margin-bottom: 8px; font-size: 1.8em; }
-    .subtitle { text-align: center; color: #8b949e; margin-bottom: 24px; }
+    h1 { text-align: center; margin-bottom: 4px; font-size: 1.6em; }
+    .subtitle { text-align: center; color: #8b949e; margin-bottom: 16px; font-size: 0.9em; }
 
     /* Month tabs */
     .tabs {
       display: flex;
-      gap: 8px;
-      justify-content: center;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-start;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 4px;
     }
+    .tabs::-webkit-scrollbar { display: none; }
     .tab {
-      padding: 8px 20px;
+      padding: 8px 16px;
       border-radius: 8px;
       background: #161b22;
       border: 1px solid #30363d;
       color: #8b949e;
       cursor: pointer;
       transition: all 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      font-size: 0.9em;
     }
     .tab:hover { border-color: #58a6ff; color: #58a6ff; }
     .tab.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
@@ -41,19 +49,19 @@
     /* Summary cards */
     .cards {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
     }
     .card {
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 12px;
-      padding: 20px;
+      padding: 14px 10px;
       text-align: center;
     }
-    .card .label { color: #8b949e; font-size: 0.85em; margin-bottom: 4px; }
-    .card .value { font-size: 1.6em; font-weight: 700; }
+    .card .label { color: #8b949e; font-size: 0.75em; margin-bottom: 4px; }
+    .card .value { font-size: 1.2em; font-weight: 700; }
     .card .value.income { color: #3fb950; }
     .card .value.expense { color: #f85149; }
     .card .value.profit-pos { color: #3fb950; }
@@ -63,57 +71,105 @@
     /* Chart grid */
     .charts {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
     }
-    @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
     .chart-box {
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 12px;
-      padding: 20px;
+      padding: 14px;
     }
-    .chart-box h3 { margin-bottom: 12px; font-size: 1em; color: #c9d1d9; }
-    .chart-box canvas { max-height: 300px; }
+    .chart-box h3 { margin-bottom: 10px; font-size: 0.95em; color: #c9d1d9; }
+    .chart-box canvas { max-height: 280px; }
 
-    /* Debt table */
+    /* Debt section */
     .debt-section {
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
+      padding: 14px;
+      margin-bottom: 16px;
     }
-    .debt-section h3 { margin-bottom: 12px; }
+    .debt-section h3 { margin-bottom: 10px; font-size: 0.95em; }
     .debt-row {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       padding: 10px 0;
       border-bottom: 1px solid #21262d;
+      gap: 8px;
     }
     .debt-row:last-child { border-bottom: none; }
-    .debt-label { color: #c9d1d9; }
-    .debt-amount { font-weight: 600; color: #d29922; }
-    .debt-change { font-size: 0.85em; margin-left: 8px; }
+    .debt-label { color: #c9d1d9; font-size: 0.9em; flex-shrink: 1; min-width: 0; }
+    .debt-values { text-align: right; flex-shrink: 0; }
+    .debt-amount { font-weight: 600; color: #d29922; font-size: 0.9em; }
+    .debt-change { font-size: 0.75em; display: block; margin-top: 2px; }
     .debt-change.down { color: #3fb950; }
     .debt-change.up { color: #f85149; }
 
-    /* Transactions table */
+    /* Transactions */
     .tx-section {
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 12px;
-      padding: 20px;
+      padding: 14px;
     }
-    .tx-section h3 { margin-bottom: 12px; }
+    .tx-section h3 { margin-bottom: 10px; font-size: 0.95em; }
+
+    /* Card-style transactions for mobile */
+    .tx-list { display: none; }
+    .tx-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .tx-card:last-child { border-bottom: none; }
+    .tx-card-left { min-width: 0; flex: 1; }
+    .tx-card-cat { font-size: 0.9em; color: #c9d1d9; }
+    .tx-card-desc { font-size: 0.75em; color: #8b949e; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tx-card-month { font-size: 0.7em; color: #6e7681; margin-top: 1px; }
+    .tx-card-amount { font-weight: 600; font-size: 0.95em; flex-shrink: 0; margin-left: 12px; }
+
+    /* Desktop table */
+    .tx-table { display: none; }
     table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; color: #8b949e; font-weight: 500; padding: 8px; border-bottom: 1px solid #30363d; }
-    td { padding: 8px; border-bottom: 1px solid #21262d; }
+    th { text-align: left; color: #8b949e; font-weight: 500; padding: 8px; border-bottom: 1px solid #30363d; font-size: 0.85em; }
+    td { padding: 8px; border-bottom: 1px solid #21262d; font-size: 0.85em; }
     .tx-income { color: #3fb950; }
     .tx-expense { color: #f85149; }
 
-    .loading { text-align: center; padding: 60px; color: #8b949e; font-size: 1.2em; }
+    .loading { text-align: center; padding: 60px; color: #8b949e; font-size: 1.1em; }
+    .empty { text-align: center; color: #8b949e; padding: 20px; font-size: 0.9em; }
+
+    /* Desktop overrides */
+    @media (min-width: 768px) {
+      body { padding: 20px; }
+      h1 { font-size: 1.8em; }
+      .subtitle { font-size: 1em; margin-bottom: 24px; }
+      .cards { grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+      .card { padding: 20px; }
+      .card .label { font-size: 0.85em; }
+      .card .value { font-size: 1.6em; }
+      .charts { grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+      .chart-box { padding: 20px; }
+      .debt-section, .tx-section { padding: 20px; }
+      .debt-label, .debt-amount { font-size: 1em; }
+      .debt-change { font-size: 0.85em; display: inline; margin-left: 8px; margin-top: 0; }
+      .debt-values { display: inline; }
+      .tab { padding: 8px 20px; font-size: 1em; }
+      .tabs { justify-content: center; }
+      .tx-list { display: none !important; }
+      .tx-table { display: block !important; }
+    }
+
+    @media (max-width: 767px) {
+      .tx-list { display: block; }
+      .tx-table { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -244,10 +300,13 @@
         </div>
         <div class="tx-section">
           <h3>📝 Последние записи</h3>
-          <table>
-            <thead><tr><th>Месяц</th><th>Тип</th><th>Категория</th><th>Сумма</th><th>Описание</th></tr></thead>
-            <tbody id="txRows"></tbody>
-          </table>
+          <div class="tx-list" id="txList"></div>
+          <div class="tx-table" id="txTable">
+            <table>
+              <thead><tr><th>Месяц</th><th>Тип</th><th>Категория</th><th>Сумма</th><th>Описание</th></tr></thead>
+              <tbody id="txRows"></tbody>
+            </table>
+          </div>
         </div>
       `;
 
@@ -264,6 +323,9 @@
       container.innerHTML = allMonths.map(m =>
         `<div class="tab ${m === selectedMonth ? 'active' : ''}" onclick="selectMonth('${m}')">${m}</div>`
       ).join('');
+      // Scroll active tab into view on mobile
+      const active = container.querySelector('.tab.active');
+      if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
     }
 
     function selectMonth(m) {
@@ -275,6 +337,7 @@
       const ctx = document.getElementById('expenseChart');
       if (!ctx) return;
       const entries = Object.entries(d.expenses).filter(([, v]) => v > 0);
+      const isMobile = window.innerWidth < 768;
       if (expenseChart) expenseChart.destroy();
       expenseChart = new Chart(ctx, {
         type: 'doughnut',
@@ -288,10 +351,11 @@
         },
         options: {
           responsive: true,
+          maintainAspectRatio: true,
           plugins: {
             legend: {
-              position: 'right',
-              labels: { color: '#c9d1d9', font: { size: 11 }, padding: 8 }
+              position: isMobile ? 'bottom' : 'right',
+              labels: { color: '#c9d1d9', font: { size: isMobile ? 10 : 11 }, padding: 6, boxWidth: 12 }
             },
             tooltip: {
               callbacks: {
@@ -306,11 +370,12 @@
     function renderBarChart() {
       const ctx = document.getElementById('barChart');
       if (!ctx) return;
+      const isMobile = window.innerWidth < 768;
       if (barChart) barChart.destroy();
       barChart = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: allMonths,
+          labels: allMonths.map(m => isMobile ? m.split(' ')[0].substring(0, 3) : m),
           datasets: [
             {
               label: 'Доходы',
@@ -328,18 +393,20 @@
         },
         options: {
           responsive: true,
+          maintainAspectRatio: true,
           scales: {
-            x: { ticks: { color: '#8b949e' }, grid: { display: false } },
+            x: { ticks: { color: '#8b949e', font: { size: isMobile ? 10 : 12 } }, grid: { display: false } },
             y: {
               ticks: {
                 color: '#8b949e',
-                callback: (v) => '₽' + fmt(v),
+                font: { size: isMobile ? 9 : 12 },
+                callback: (v) => v >= 1000 ? '₽' + Math.round(v/1000) + 'к' : '₽' + v,
               },
               grid: { color: '#21262d' },
             },
           },
           plugins: {
-            legend: { labels: { color: '#c9d1d9' } },
+            legend: { labels: { color: '#c9d1d9', font: { size: isMobile ? 10 : 12 } } },
             tooltip: {
               callbacks: {
                 label: (ctx) => ` ${ctx.dataset.label}: ₽${fmt(ctx.raw)}`
@@ -354,7 +421,6 @@
       const container = document.getElementById('debtRows');
       if (!container) return;
 
-      // Find previous month for comparison
       const idx = allMonths.indexOf(selectedMonth);
       const prev = idx > 0 ? DATA[allMonths[idx - 1]] : null;
 
@@ -368,40 +434,76 @@
           if (diff < 0) changeHtml = `<span class="debt-change down">↓ −₽${fmt(Math.abs(diff))}</span>`;
           else if (diff > 0) changeHtml = `<span class="debt-change up">↑ +₽${fmt(Math.abs(diff))}</span>`;
         }
-        html += `<div class="debt-row"><span class="debt-label">${label}</span><span><span class="debt-amount">₽${fmt(val)}</span>${changeHtml}</span></div>`;
+        html += `<div class="debt-row"><span class="debt-label">${label}</span><span class="debt-values"><span class="debt-amount">₽${fmt(val)}</span>${changeHtml}</span></div>`;
       }
 
-      // Total
       let totalChange = '';
       if (d.debtChange) {
         const cls = d.debtChange < 0 ? 'down' : 'up';
         const sign = d.debtChange < 0 ? '↓ −' : '↑ +';
         totalChange = `<span class="debt-change ${cls}">${sign}₽${fmt(Math.abs(d.debtChange))}</span>`;
       }
-      html += `<div class="debt-row" style="font-weight:700"><span class="debt-label">Итого</span><span><span class="debt-amount">₽${fmt(d.totalDebt)}</span>${totalChange}</span></div>`;
+      html += `<div class="debt-row" style="font-weight:700"><span class="debt-label">Итого</span><span class="debt-values"><span class="debt-amount">₽${fmt(d.totalDebt)}</span>${totalChange}</span></div>`;
 
       container.innerHTML = html;
     }
 
     function renderTransactions() {
+      const txList = document.getElementById('txList');
       const tbody = document.getElementById('txRows');
-      if (!tbody) return;
+
       if (!TRANSACTIONS.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#8b949e">Нет ручных записей</td></tr>';
+        if (txList) txList.innerHTML = '<div class="empty">Нет ручных записей</div>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#8b949e">Нет ручных записей</td></tr>';
         return;
       }
-      tbody.innerHTML = TRANSACTIONS.slice(0, 50).map(t => {
-        const cls = t.type === 'income' ? 'tx-income' : 'tx-expense';
-        const sign = t.type === 'income' ? '+' : '−';
-        return `<tr>
-          <td>${t.month}</td>
-          <td class="${cls}">${t.type === 'income' ? 'Доход' : 'Расход'}</td>
-          <td>${t.category}</td>
-          <td class="${cls}">${sign}₽${fmt(t.amount)}</td>
-          <td>${t.description || '—'}</td>
-        </tr>`;
-      }).join('');
+
+      const items = TRANSACTIONS.slice(0, 50);
+
+      // Mobile card list
+      if (txList) {
+        txList.innerHTML = items.map(t => {
+          const cls = t.type === 'income' ? 'tx-income' : 'tx-expense';
+          const sign = t.type === 'income' ? '+' : '−';
+          const emoji = CATEGORY_EMOJI[t.category] || '📝';
+          return `<div class="tx-card">
+            <div class="tx-card-left">
+              <div class="tx-card-cat">${emoji} ${t.category}</div>
+              <div class="tx-card-desc">${t.description || '—'}</div>
+              <div class="tx-card-month">${t.month}</div>
+            </div>
+            <div class="tx-card-amount ${cls}">${sign}₽${fmt(t.amount)}</div>
+          </div>`;
+        }).join('');
+      }
+
+      // Desktop table
+      if (tbody) {
+        tbody.innerHTML = items.map(t => {
+          const cls = t.type === 'income' ? 'tx-income' : 'tx-expense';
+          const sign = t.type === 'income' ? '+' : '−';
+          return `<tr>
+            <td>${t.month}</td>
+            <td class="${cls}">${t.type === 'income' ? 'Доход' : 'Расход'}</td>
+            <td>${t.category}</td>
+            <td class="${cls}">${sign}₽${fmt(t.amount)}</td>
+            <td>${t.description || '—'}</td>
+          </tr>`;
+        }).join('');
+      }
     }
+
+    // Re-render charts on resize for responsive legend/labels
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (selectedMonth) {
+          renderExpenseChart(DATA[selectedMonth]);
+          renderBarChart();
+        }
+      }, 250);
+    });
 
     loadData();
   </script>
