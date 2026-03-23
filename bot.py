@@ -122,8 +122,12 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
     elif action == "dashboard":
+        base = os.getenv("DASHBOARD_URL", "http://localhost:8080")
+        token = os.getenv("DASHBOARD_TOKEN", "")
+        url = f"{base}?token={token}" if token else base
         await query.message.reply_text(
-            f"\U0001f4ca Дашборд: {os.getenv('DASHBOARD_URL', 'http://localhost:8080')}",
+            f"\U0001f4ca [Открыть дашборд]({url})",
+            parse_mode="Markdown",
             reply_markup=main_menu_keyboard(),
         )
 
@@ -211,8 +215,14 @@ def main():
     app.add_handler(CommandHandler("month", handle_month_command))
     app.add_handler(CommandHandler("debt", handle_debt_command))
     app.add_handler(CommandHandler("ask", handle_ask_command))
+    def _dashboard_url():
+        base = os.getenv("DASHBOARD_URL", "http://localhost:8080")
+        token = os.getenv("DASHBOARD_TOKEN", "")
+        return f"{base}?token={token}" if token else base
+
     app.add_handler(CommandHandler("dashboard", lambda u, c: u.message.reply_text(
-        f"\U0001f4ca Дашборд: {os.getenv('DASHBOARD_URL', 'http://localhost:8080')}"
+        f"\U0001f4ca [Открыть дашборд]({_dashboard_url()})",
+        parse_mode="Markdown",
     )))
 
     # Menu button callbacks

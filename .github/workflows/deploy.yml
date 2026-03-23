@@ -47,6 +47,8 @@ jobs:
             DATABASE_PATH=/home/kbudget/budget.db
             DASHBOARD_PORT=8080
             DASHBOARD_URL=http://${{ secrets.VPS_HOST }}:8080
+            DASHBOARD_TOKEN=${{ secrets.DASHBOARD_TOKEN }}
+            DASHBOARD_SECRET=${{ secrets.DASHBOARD_TOKEN }}
             ALLOWED_CHAT_IDS=${{ secrets.ALLOWED_CHAT_IDS }}
             ENVEOF
             # Remove leading whitespace from .env

@@ -4,13 +4,27 @@ import os
 # Allow imports from project root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request, abort, session
 from dotenv import load_dotenv
 from db import init_db, get_conn
 
 load_dotenv()
 
 app = Flask(__name__, static_folder=".")
+app.secret_key = os.getenv("DASHBOARD_SECRET", "change-me-in-production")
+
+DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "")
+
+
+@app.before_request
+def check_auth():
+    # Token auth: once validated, store in session so subsequent requests work
+    token = request.args.get("token")
+    if token and token == DASHBOARD_TOKEN:
+        session["authenticated"] = True
+
+    if not session.get("authenticated"):
+        abort(403)
 
 
 @app.route("/")
